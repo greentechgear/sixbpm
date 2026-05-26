@@ -1,0 +1,23 @@
+# Example nginx server block for sixbpm.
+# Replace example.com, certificate paths, and /var/www/sixbpm with your values.
+#
+# server {
+#     listen 443 ssl http2;
+#     listen [::]:443 ssl http2;
+#     server_name example.com;
+#
+#     root /var/www/sixbpm;
+#     index index.html;
+#
+#     ssl_certificate /etc/letsencrypt/live/example.com/fullchain.pem;
+#     ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
+#
+#     location / {
+#         try_files $uri $uri/ /index.html;
+#     }
+#
+#     location ~* \.(?:js|css|png|json)$ {
+#         add_header Cache-Control "public, max-age=3600";
+#         try_files $uri =404;
+#     }
+# }
