@@ -11,7 +11,13 @@
   --button-text: #ffffff;
   --log-bg: #eef2f2;
   --disabled: #aeb7b8;
+  --space-xs: 6px;
+  --space-sm: 10px;
+  --space-md: 14px;
+  --space-lg: 22px;
+  --space-xl: 32px;
 }
+
 
 @media (prefers-color-scheme: dark) {
   :root {
@@ -58,14 +64,14 @@ input {
   margin: 0 auto;
   padding: 28px clamp(16px, 4vw, 32px);
   display: grid;
-  gap: 22px;
+  gap: var(--space-lg);
   align-content: start;
 }
 
 .orb-section {
   display: grid;
   justify-items: center;
-  gap: 18px;
+  gap: 16px;
   padding-top: 10px;
 }
 
@@ -106,6 +112,19 @@ input {
   font-size: 0.88rem;
   font-weight: 700;
   letter-spacing: 0.12em;
+}
+
+.prep-note {
+  padding: 12px 14px;
+  background: var(--accent-weak);
+  border: 0.5px solid var(--border);
+  border-radius: 8px;
+}
+
+.prep-note p {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.94rem;
 }
 
 .stats {
@@ -211,14 +230,12 @@ input[type="range"]:disabled {
   min-height: 1.5em;
   margin: 0;
   color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .buttons {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: 2fr 1fr 1fr;
   gap: 10px;
 }
 
@@ -232,6 +249,16 @@ button {
   cursor: pointer;
 }
 
+.primary-action {
+  min-height: 50px;
+  font-weight: 700;
+}
+
+.secondary-action {
+  background: transparent;
+  color: var(--accent);
+}
+
 button:disabled {
   border-color: var(--border);
   background: var(--disabled);
@@ -239,8 +266,40 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.secondary-action:disabled {
+  background: transparent;
+  color: var(--disabled);
+}
+
 button:not(:disabled):active {
   transform: translateY(1px);
+}
+
+
+.diagnostics-panel {
+  border-top: 0.5px solid var(--border);
+  padding-top: 12px;
+}
+
+.diagnostics-panel summary {
+  width: fit-content;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.86rem;
+}
+
+.diagnostics-panel summary:focus-visible,
+button:focus-visible,
+a:focus-visible,
+input[type="range"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.diagnostics-content {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
 }
 
 .debug-section {
@@ -410,10 +469,6 @@ button:not(:disabled):active {
   .stats,
   .buttons {
     grid-template-columns: 1fr;
-  }
-
-  .status-message {
-    white-space: normal;
   }
 
   .about-shell {

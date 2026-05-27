@@ -7,8 +7,8 @@
     <meta name="color-scheme" content="light dark">
     <meta http-equiv="Permissions-Policy" content="accelerometer=(self), gyroscope=(self)">
     <title>sixbpm</title>
-    <link rel="manifest" href="manifest.json?v=cache-v21">
-    <link rel="stylesheet" href="style.css?v=cache-v21">
+    <link rel="manifest" href="manifest.json?v=cache-v22">
+    <link rel="stylesheet" href="style.css?v=cache-v22">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
   </head>
   <body>
@@ -18,6 +18,10 @@
           <div id="orb" class="orb"></div>
         </div>
         <div id="phaseLabel" class="phase-label">READY</div>
+      </section>
+
+      <section id="prepNote" class="prep-note" aria-label="session setup">
+        <p>Phone face-down on chest. Lie still. Start, then leave it alone for 15 minutes.</p>
       </section>
 
       <section class="stats" aria-label="session stats">
@@ -41,7 +45,7 @@
           <input id="ratioSlider" type="range" min="1" max="2.5" step="0.1" value="2">
         </label>
         <label class="control">
-          <span>Floor BPM <output id="floorValue">6</output></span>
+          <span>Slowest target <output id="floorValue">6</output></span>
           <input id="floorSlider" type="range" min="5" max="10" step="0.1" value="6">
         </label>
         <label class="control">
@@ -51,7 +55,6 @@
       </section>
 
       <section class="status-row" aria-live="polite">
-        <div id="versionLabel" class="version-label">Version: loading</div>
         <div class="sensor-status">
           <span id="sensorDot" class="sensor-dot"></span>
           <span id="sensorLabel">Sensor: not started</span>
@@ -60,25 +63,29 @@
       </section>
 
       <section class="buttons" aria-label="actions">
-        <button id="startButton" type="button">Start session</button>
-        <button id="stopButton" type="button" disabled>Stop</button>
-        <button id="testButton" type="button">Test tones</button>
-        <button id="copyReportButton" type="button">Copy report</button>
+        <button id="startButton" class="primary-action" type="button">Start session</button>
+        <button id="stopButton" class="secondary-action" type="button" disabled>Stop</button>
+        <button id="testButton" class="secondary-action" type="button">Test tones</button>
       </section>
 
-      <section class="debug-section" aria-label="sensor debug">
-        <div class="debug-line" id="debugLine">Sensor debug: idle</div>
-        <div class="debug-line" id="debugSample">Last sample: none</div>
-      </section>
-
-      <section id="reportSection" class="report-section" aria-label="diagnostic report" hidden>
-        <label for="reportText">Diagnostic report</label>
-        <textarea id="reportText" class="report-text" readonly></textarea>
-      </section>
-
-      <section class="log-section" aria-label="session log">
-        <pre id="sessionLog" class="session-log" tabindex="0"></pre>
-      </section>
+      <details class="diagnostics-panel">
+        <summary>Diagnostics</summary>
+        <div class="diagnostics-content">
+          <div id="versionLabel" class="version-label">Version: loading</div>
+          <section class="debug-section" aria-label="sensor debug">
+            <div class="debug-line" id="debugLine">Sensor debug: idle</div>
+            <div class="debug-line" id="debugSample">Last sample: none</div>
+          </section>
+          <button id="copyReportButton" class="secondary-action" type="button">Copy diagnostic report</button>
+          <section id="reportSection" class="report-section" aria-label="diagnostic report" hidden>
+            <label for="reportText">Diagnostic report</label>
+            <textarea id="reportText" class="report-text" readonly></textarea>
+          </section>
+          <section class="log-section" aria-label="session log">
+            <pre id="sessionLog" class="session-log" tabindex="0"></pre>
+          </section>
+        </div>
+      </details>
 
       <footer class="app-footer">
         <a href="about.html">why 6?</a>
@@ -86,6 +93,6 @@
       </footer>
     </main>
 
-    <script src="app.js?v=cache-v21" defer></script>
+    <script src="app.js?v=cache-v22" defer></script>
   </body>
 </html>

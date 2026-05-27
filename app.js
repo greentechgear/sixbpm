@@ -11,7 +11,7 @@
   const REFRACTORY_MS = 3000;
   const STORAGE_KEY = "sixbpm.sessions";
   const REPORT_STORAGE_KEY = "sixbpm.lastReport";
-  const APP_VERSION = "diagnostics-v17 / cache-v21";
+  const APP_VERSION = "diagnostics-v18 / cache-v22";
 
   const $ = (id) => document.getElementById(id);
   const els = {
@@ -26,6 +26,7 @@
     ratioValue: $("ratioValue"),
     floorValue: $("floorValue"),
     volumeValue: $("volumeValue"),
+    prepNote: $("prepNote"),
     versionLabel: $("versionLabel"),
     sensorDot: $("sensorDot"),
     sensorLabel: $("sensorLabel"),
@@ -146,6 +147,12 @@
 
   function setStatus(message) {
     els.statusMessage.textContent = message;
+  }
+
+  function setPrepVisible(visible) {
+    if (els.prepNote) {
+      els.prepNote.hidden = !visible;
+    }
   }
 
   function setPhase(phase) {
@@ -338,9 +345,10 @@
     els.stopButton.disabled = false;
     els.testButton.disabled = true;
     setSessionControlLock(true);
+    setPrepVisible(false);
     els.orb.classList.add("calibrating");
     setPhase("calibrating");
-    setStatus("Calibrating for 60 seconds.");
+    setStatus("Calibrating. Keep the phone still while we find your breathing signal.");
     setSensorStatus("active", "Sensor: active");
     updateStats();
     log("Session started");
@@ -379,11 +387,12 @@
     els.stopButton.disabled = true;
     els.testButton.disabled = false;
     setSessionControlLock(false);
+    setPrepVisible(true);
 
     if (completed) {
       state.phase = "done";
       setPhase("done");
-      setStatus("session complete, take your BP reading now");
+      setStatus("Session complete. Sit up slowly. Take BP now if you are tracking it.");
       els.timeRemaining.textContent = "0:00";
       log("Session ended");
       finalizeDiagnostics("completed");
@@ -641,7 +650,7 @@
       state.syncSamples = state.syncSamples.slice(-80);
       if (state.missedCycleStreak >= SENSOR_WEAK_STREAK && !state.weakSensorNoticeShown) {
         state.weakSensorNoticeShown = true;
-        setStatus("Sensor signal is weak; continuing as a pacer.");
+        setStatus("Sensor signal is weak. Keep following the tones.");
         log("Sensor signal weak; pacer descent will continue");
       }
     } else if (cycle.hasPeak) {
@@ -655,7 +664,7 @@
     if (state.fastBreathStreak >= FAST_BREATH_HOLD_STREAK) {
       state.diagnostics.hold_count += 1;
       state.diagnostics.fast_breath_hold_count += 1;
-      setStatus("Holding target; detected breathing is still faster than the pacer.");
+      setStatus("Holding pace; your breathing is still faster than the target.");
       log(`Holding at ${state.targetBpm.toFixed(1)} BPM; detected ${cycle.detectedBpm.toFixed(1)} BPM`);
       return;
     }
@@ -668,7 +677,7 @@
         state.diagnostics.pacer_descent_count += 1;
       }
       if (!state.weakSensorNoticeShown) {
-        setStatus("Follow the tones.");
+        setStatus("Follow the tones. Inhale as the orb grows; exhale as it softens.");
       }
     }
   }
@@ -1292,6 +1301,7 @@
     scheduleTone(startAt + inhaleSeconds, exhaleSeconds, 523, 220);
     state.currentVisual = { startAudio: startAt, inhaleSeconds, exhaleSeconds, cycleSeconds };
     state.phase = "pacing";
+    setPrepVisible(false);
     animateOrb();
     setStatus("Testing one breath cycle.");
     log("Test tone cycle started");
@@ -1299,6 +1309,7 @@
     scheduleTimeout(() => setPhase("exhale"), 100 + inhaleSeconds * 1000);
     scheduleTimeout(() => {
       state.phase = "ready";
+      setPrepVisible(true);
       window.cancelAnimationFrame(state.rafId);
       els.orb.style.transform = "scale(1)";
       setPhase("ready");
@@ -1308,7 +1319,7 @@
 
   function registerServiceWorker() {
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
-      navigator.serviceWorker.register("sw.js?v=cache-v21").catch((error) => {
+      navigator.serviceWorker.register("sw.js?v=cache-v22").catch((error) => {
         log(`Service worker registration failed: ${error.message}`);
       });
     }
