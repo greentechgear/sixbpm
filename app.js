@@ -11,7 +11,7 @@
   const REFRACTORY_MS = 3000;
   const STORAGE_KEY = "sixbpm.sessions";
   const REPORT_STORAGE_KEY = "sixbpm.lastReport";
-  const APP_VERSION = "diagnostics-v16 / cache-v20";
+  const APP_VERSION = "diagnostics-v17 / cache-v21";
 
   const $ = (id) => document.getElementById(id);
   const els = {
@@ -59,6 +59,7 @@
     nextCycleAudioTime: 0,
     targetBpm: null,
     baselineBpm: null,
+    sessionSettings: null,
     breathCount: 0,
     syncSamples: [],
     syncMisses: 0,
@@ -88,6 +89,9 @@
       audio_state: "not started",
       wake_lock: "not requested",
       settings: {},
+      settings_start: {},
+      settings_final: {},
+      settings_changes: [],
       motion_events: 0,
       orientation_events: 0,
       generic_sensor_events: 0,
@@ -155,6 +159,15 @@
     if (state.masterGain) {
       state.masterGain.gain.setTargetAtTime(Number(els.volumeSlider.value) / 100, state.audioCtx.currentTime, 0.03);
     }
+  }
+
+  function handleSettingInput() {
+    updateSliderLabels();
+  }
+
+  function handleSettingChange(event) {
+    updateSliderLabels();
+    recordSettingChange(event.target);
   }
 
   function formatBpm(value) {
@@ -274,6 +287,7 @@
     state.nextCycleAudioTime = 0;
     state.targetBpm = null;
     state.baselineBpm = null;
+    state.sessionSettings = null;
     state.breathCount = 0;
     state.syncSamples = [];
     state.syncMisses = 0;
@@ -299,7 +313,10 @@
     resetSessionState();
     state.diagnostics.session_id = `sixbpm-${Date.now()}`;
     state.diagnostics.started_at = new Date().toISOString();
-    state.diagnostics.settings = currentSettings();
+    state.sessionSettings = currentSettings();
+    state.diagnostics.settings = { ...state.sessionSettings };
+    state.diagnostics.settings_start = { ...state.sessionSettings };
+    state.diagnostics.settings_final = { ...state.sessionSettings };
 
     try {
       await ensureAudio();
@@ -320,6 +337,7 @@
     els.startButton.disabled = true;
     els.stopButton.disabled = false;
     els.testButton.disabled = true;
+    setSessionControlLock(true);
     els.orb.classList.add("calibrating");
     setPhase("calibrating");
     setStatus("Calibrating for 60 seconds.");
@@ -360,6 +378,7 @@
     els.startButton.disabled = false;
     els.stopButton.disabled = true;
     els.testButton.disabled = false;
+    setSessionControlLock(false);
 
     if (completed) {
       state.phase = "done";
@@ -387,9 +406,48 @@
     };
   }
 
+  function sessionSettings() {
+    return state.sessionSettings || currentSettings();
+  }
+
+  function setSessionControlLock(locked) {
+    els.ratioSlider.disabled = locked;
+    els.floorSlider.disabled = locked;
+  }
+
+  function recordSettingChange(input) {
+    if (!input || !state.sessionStartMs || (state.phase !== "calibrating" && state.phase !== "pacing")) {
+      return;
+    }
+    const keyById = {
+      ratioSlider: "ratio",
+      floorSlider: "floor_bpm",
+      volumeSlider: "volume"
+    };
+    const key = keyById[input.id];
+    if (!key) {
+      return;
+    }
+    const value = key === "volume" ? Number(input.value) : rounded(Number(input.value));
+    const elapsedMs = state.sessionStartMs ? Math.round(performance.now() - state.sessionStartMs) : 0;
+    const last = state.diagnostics.settings_changes[state.diagnostics.settings_changes.length - 1];
+    if (last && last.key === key && last.value === value) {
+      return;
+    }
+    state.diagnostics.settings_changes.push({
+      elapsed_ms: elapsedMs,
+      key,
+      value
+    });
+    state.diagnostics.settings_changes = state.diagnostics.settings_changes.slice(-20);
+    state.diagnostics.settings_final = currentSettings();
+    log(`Setting changed: ${key} ${value}`);
+  }
+
   function finalizeDiagnostics(status) {
     state.diagnostics.ended_at = new Date().toISOString();
     state.diagnostics.status = status;
+    state.diagnostics.settings_final = currentSettings();
     state.diagnostics.final_target_bpm = rounded(state.targetBpm);
     state.diagnostics.sync_quality_score = rounded(calculateSyncScore());
     state.diagnostics.calibration_peak_count = state.breathDetector.calibrationPeakCount || state.diagnostics.calibration_peak_count;
@@ -470,7 +528,7 @@
     const rawBaseline = Number.isFinite(measured) ? measured : Number.isFinite(fallback) ? fallback : 12;
     const baseline = clamp(rawBaseline || 12, 6, 18);
     const baselineSource = Number.isFinite(measured) ? "detected rolling BPM" : Number.isFinite(fallback) ? "detected calibration peaks" : "fallback 12 BPM, not enough peaks";
-    const floor = Number(els.floorSlider.value);
+    const floor = sessionSettings().floor_bpm;
 
     state.baselineBpm = Math.max(floor, baseline);
     state.targetBpm = Math.max(floor, state.baselineBpm - 1);
@@ -503,9 +561,10 @@
   }
 
   function scheduleNextCycle() {
-    const target = state.targetBpm || Number(els.floorSlider.value);
+    const settings = sessionSettings();
+    const target = state.targetBpm || settings.floor_bpm;
     const cycleSeconds = 60 / target;
-    const ratio = Number(els.ratioSlider.value);
+    const ratio = settings.ratio;
     const inhaleSeconds = cycleSeconds / (1 + ratio);
     const exhaleSeconds = cycleSeconds - inhaleSeconds;
     const startAt = state.nextCycleAudioTime;
@@ -571,7 +630,7 @@
       return;
     }
     cycle.evaluated = true;
-    const floor = Number(els.floorSlider.value);
+    const floor = sessionSettings().floor_bpm;
     const sensorActive = !state.diagnostics.pacer_only_mode;
 
     if (sensorActive && !cycle.hasPeak) {
@@ -1222,9 +1281,10 @@
       setStatus(error.message);
       return;
     }
-    const target = Number(els.floorSlider.value);
+    const settings = currentSettings();
+    const target = settings.floor_bpm;
     const cycleSeconds = 60 / target;
-    const ratio = Number(els.ratioSlider.value);
+    const ratio = settings.ratio;
     const inhaleSeconds = cycleSeconds / (1 + ratio);
     const exhaleSeconds = cycleSeconds - inhaleSeconds;
     const startAt = state.audioCtx.currentTime + 0.1;
@@ -1248,7 +1308,7 @@
 
   function registerServiceWorker() {
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
-      navigator.serviceWorker.register("sw.js?v=cache-v20").catch((error) => {
+      navigator.serviceWorker.register("sw.js?v=cache-v21").catch((error) => {
         log(`Service worker registration failed: ${error.message}`);
       });
     }
@@ -1259,9 +1319,12 @@
     els.versionLabel.textContent = `Version: ${APP_VERSION}`;
     setPhase("ready");
     updateStats();
-    els.ratioSlider.addEventListener("input", updateSliderLabels);
-    els.floorSlider.addEventListener("input", updateSliderLabels);
-    els.volumeSlider.addEventListener("input", updateSliderLabels);
+    els.ratioSlider.addEventListener("input", handleSettingInput);
+    els.floorSlider.addEventListener("input", handleSettingInput);
+    els.volumeSlider.addEventListener("input", handleSettingInput);
+    els.ratioSlider.addEventListener("change", handleSettingChange);
+    els.floorSlider.addEventListener("change", handleSettingChange);
+    els.volumeSlider.addEventListener("change", handleSettingChange);
     els.startButton.addEventListener("click", startSession);
     els.stopButton.addEventListener("click", stopSession);
     els.testButton.addEventListener("click", testTones);
