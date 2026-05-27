@@ -6,10 +6,12 @@
   const AXIS_PICK_MS = 15 * 1000;
   const DESCENT_PER_CYCLE = 0.2;
   const SYNC_DIVERGENCE_BPM = 2;
+  const FAST_BREATH_HOLD_STREAK = 3;
+  const SENSOR_WEAK_STREAK = 6;
   const REFRACTORY_MS = 3000;
   const STORAGE_KEY = "sixbpm.sessions";
   const REPORT_STORAGE_KEY = "sixbpm.lastReport";
-  const APP_VERSION = "diagnostics-v15 / cache-v19";
+  const APP_VERSION = "diagnostics-v16 / cache-v20";
 
   const $ = (id) => document.getElementById(id);
   const els = {
@@ -60,6 +62,9 @@
     breathCount: 0,
     syncSamples: [],
     syncMisses: 0,
+    missedCycleStreak: 0,
+    fastBreathStreak: 0,
+    weakSensorNoticeShown: false,
     scheduledInhales: [],
     timeouts: [],
     breathDetector: createBreathDetector(),
@@ -68,7 +73,6 @@
     axisSource: null,
     axisSelectedMs: 0,
     currentVisual: null,
-    lastCycleHadPeak: false,
     diagnostics: createDiagnostics()
   };
 
@@ -113,6 +117,10 @@
       pacing_cycles: 0,
       sync_event_count: 0,
       sync_miss_count: 0,
+      missed_cycle_count: 0,
+      fast_breath_hold_count: 0,
+      pacer_descent_count: 0,
+      sensor_assisted_descent_count: 0,
       hold_count: 0,
       sync_quality_score: null,
       visibility_state: document.visibilityState,
@@ -269,6 +277,9 @@
     state.breathCount = 0;
     state.syncSamples = [];
     state.syncMisses = 0;
+    state.missedCycleStreak = 0;
+    state.fastBreathStreak = 0;
+    state.weakSensorNoticeShown = false;
     state.scheduledInhales = [];
     clearScheduledTimeouts();
     state.axisSamples = [];
@@ -276,7 +287,6 @@
     state.axisSource = null;
     state.axisSelectedMs = 0;
     state.currentVisual = null;
-    state.lastCycleHadPeak = false;
     state.diagnostics = createDiagnostics();
     state.breathDetector = createBreathDetector();
   }
@@ -499,25 +509,39 @@
     const inhaleSeconds = cycleSeconds / (1 + ratio);
     const exhaleSeconds = cycleSeconds - inhaleSeconds;
     const startAt = state.nextCycleAudioTime;
-    const inhalePeakMs = performance.now() + Math.max(0, (startAt - state.audioCtx.currentTime) * 1000);
+    const startMs = performance.now() + Math.max(0, (startAt - state.audioCtx.currentTime) * 1000);
+    const expectedPeakMs = startMs + inhaleSeconds * 1000;
 
-    state.scheduledInhales.push({ ms: inhalePeakMs, target });
-    state.scheduledInhales = state.scheduledInhales.slice(-8);
-    state.currentVisual = {
+    state.breathCount += 1;
+    const cycle = {
+      id: state.breathCount,
+      startMs,
+      ms: expectedPeakMs,
+      target,
+      hasPeak: false,
+      detectedBpm: null,
+      divergence: null,
+      timingDeltaMs: null,
+      evaluated: false
+    };
+    state.scheduledInhales.push(cycle);
+    state.scheduledInhales = state.scheduledInhales.filter((scheduled) => startMs - scheduled.startMs < 90000).slice(-18);
+    const visual = {
       startAudio: startAt,
       inhaleSeconds,
       exhaleSeconds,
       cycleSeconds
     };
-    state.breathCount += 1;
     state.diagnostics.pacing_cycles = state.breathCount;
-    state.lastCycleHadPeak = false;
 
     scheduleTone(startAt, inhaleSeconds, 330, 523);
     scheduleTone(startAt + inhaleSeconds, exhaleSeconds, 523, 220);
-    scheduleTimeout(() => setPhase("inhale"), Math.max(0, (startAt - state.audioCtx.currentTime) * 1000));
+    scheduleTimeout(() => {
+      state.currentVisual = visual;
+      setPhase("inhale");
+    }, Math.max(0, (startAt - state.audioCtx.currentTime) * 1000));
     scheduleTimeout(() => setPhase("exhale"), Math.max(0, (startAt + inhaleSeconds - state.audioCtx.currentTime) * 1000));
-    scheduleTimeout(evaluateDescent, Math.max(0, (startAt + cycleSeconds - state.audioCtx.currentTime) * 1000));
+    scheduleTimeout(() => evaluateDescent(cycle), Math.max(0, (startAt + cycleSeconds - state.audioCtx.currentTime) * 1000));
 
     state.nextCycleAudioTime += cycleSeconds;
   }
@@ -542,27 +566,51 @@
     };
   }
 
-  function evaluateDescent() {
-    if (state.phase !== "pacing" || !state.targetBpm) {
+  function evaluateDescent(cycle) {
+    if (state.phase !== "pacing" || !state.targetBpm || !cycle || cycle.evaluated) {
       return;
     }
+    cycle.evaluated = true;
     const floor = Number(els.floorSlider.value);
-    if (!state.diagnostics.pacer_only_mode && !state.lastCycleHadPeak) {
-      state.syncMisses += 1;
+    const sensorActive = !state.diagnostics.pacer_only_mode;
+
+    if (sensorActive && !cycle.hasPeak) {
+      state.missedCycleStreak += 1;
+      state.diagnostics.missed_cycle_count += 1;
+      state.diagnostics.sync_miss_count += 1;
       state.syncSamples.push(SYNC_DIVERGENCE_BPM + 1);
       state.syncSamples = state.syncSamples.slice(-80);
-      state.diagnostics.sync_miss_count += 1;
+      if (state.missedCycleStreak >= SENSOR_WEAK_STREAK && !state.weakSensorNoticeShown) {
+        state.weakSensorNoticeShown = true;
+        setStatus("Sensor signal is weak; continuing as a pacer.");
+        log("Sensor signal weak; pacer descent will continue");
+      }
+    } else if (cycle.hasPeak) {
+      state.missedCycleStreak = 0;
     }
-    const held = !state.diagnostics.pacer_only_mode && state.syncMisses >= 2;
-    if (held) {
+
+    const detectedFast = sensorActive && cycle.hasPeak && Number.isFinite(cycle.detectedBpm) && cycle.detectedBpm > cycle.target + SYNC_DIVERGENCE_BPM;
+    state.fastBreathStreak = detectedFast ? state.fastBreathStreak + 1 : 0;
+    state.syncMisses = state.fastBreathStreak;
+
+    if (state.fastBreathStreak >= FAST_BREATH_HOLD_STREAK) {
       state.diagnostics.hold_count += 1;
-      setStatus("Holding target until your breathing catches up.");
-      log(`Holding at ${state.targetBpm.toFixed(1)} BPM`);
+      state.diagnostics.fast_breath_hold_count += 1;
+      setStatus("Holding target; detected breathing is still faster than the pacer.");
+      log(`Holding at ${state.targetBpm.toFixed(1)} BPM; detected ${cycle.detectedBpm.toFixed(1)} BPM`);
       return;
     }
+
     if (state.targetBpm > floor) {
       state.targetBpm = Math.max(floor, state.targetBpm - DESCENT_PER_CYCLE);
-      setStatus("Follow the tones.");
+      if (cycle.hasPeak) {
+        state.diagnostics.sensor_assisted_descent_count += 1;
+      } else {
+        state.diagnostics.pacer_descent_count += 1;
+      }
+      if (!state.weakSensorNoticeShown) {
+        setStatus("Follow the tones.");
+      }
     }
   }
 
@@ -743,18 +791,22 @@
     }
     updateStats();
     if (state.phase === "pacing") {
-      const scheduled = nearestScheduledInhale(peak.t);
-      if (scheduled) {
-        const divergence = Math.abs((state.breathDetector.currentBpm || 0) - scheduled.target);
+      const match = nearestScheduledInhale(peak.t);
+      if (match) {
+        const scheduled = match.cycle;
+        const detectedBpm = state.breathDetector.currentBpm;
+        const divergence = Number.isFinite(detectedBpm) ? Math.abs(detectedBpm - scheduled.target) : 0;
+        scheduled.hasPeak = true;
+        scheduled.detectedBpm = Number.isFinite(detectedBpm) ? detectedBpm : null;
+        scheduled.divergence = divergence;
+        scheduled.timingDeltaMs = match.delta;
+        state.missedCycleStreak = 0;
         state.syncSamples.push(divergence);
         state.syncSamples = state.syncSamples.slice(-80);
         state.diagnostics.sync_event_count += 1;
-        state.syncMisses = divergence > SYNC_DIVERGENCE_BPM ? state.syncMisses + 1 : 0;
         if (divergence > SYNC_DIVERGENCE_BPM) {
           state.diagnostics.sync_miss_count += 1;
-        }
-        state.lastCycleHadPeak = true;
-        if (divergence <= SYNC_DIVERGENCE_BPM) {
+        } else if (!state.weakSensorNoticeShown) {
           setStatus("Follow the tones.");
         }
       }
@@ -870,13 +922,25 @@
       return null;
     }
     let best = null;
-    for (const scheduled of state.scheduledInhales) {
-      const delta = Math.abs(scheduled.ms - ms);
+    for (const cycle of state.scheduledInhales) {
+      if (cycle.evaluated) {
+        continue;
+      }
+      const delta = Math.abs(cycle.ms - ms);
       if (!best || delta < best.delta) {
-        best = { ...scheduled, delta };
+        best = { cycle, delta };
       }
     }
-    return best && best.delta <= 5000 ? best : null;
+    if (!best) {
+      return null;
+    }
+    const windowMs = syncWindowMs(best.cycle.target);
+    return best.delta <= windowMs ? best : null;
+  }
+
+  function syncWindowMs(targetBpm) {
+    const cycleMs = 60000 / clamp(targetBpm || 6, 4, 24);
+    return clamp(cycleMs * 0.45, 3500, 6500);
   }
 
   function estimateCalibrationBpm() {
@@ -1184,7 +1248,7 @@
 
   function registerServiceWorker() {
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
-      navigator.serviceWorker.register("sw.js?v=cache-v19").catch((error) => {
+      navigator.serviceWorker.register("sw.js?v=cache-v20").catch((error) => {
         log(`Service worker registration failed: ${error.message}`);
       });
     }
