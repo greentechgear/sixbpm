@@ -302,6 +302,96 @@ button:not(:disabled):active {
   white-space: pre-wrap;
 }
 
+.app-footer {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  padding: 4px 0 12px;
+}
+
+.app-footer a,
+.about-nav a,
+.about-content a {
+  color: var(--accent);
+  text-underline-offset: 0.18em;
+}
+
+.app-footer a {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.about-shell {
+  width: min(760px, 100%);
+  margin: 0 auto;
+  padding: 24px clamp(16px, 4vw, 32px) 48px;
+}
+
+.about-nav {
+  display: flex;
+  gap: 18px;
+  margin-bottom: 28px;
+}
+
+.about-nav a {
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.about-content {
+  display: grid;
+  gap: 16px;
+}
+
+.about-content h1,
+.about-content h2,
+.about-content h3,
+.about-content p,
+.about-content ol,
+.about-content ul {
+  margin: 0;
+}
+
+.about-content h1 {
+  font-size: clamp(2rem, 10vw, 3.3rem);
+  line-height: 1;
+}
+
+.about-content h2 {
+  margin-top: 18px;
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.about-content h3 {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.96rem;
+  line-height: 1.3;
+}
+
+.about-content p,
+.about-content li {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.about-content h1 a,
+.about-content p a {
+  overflow-wrap: anywhere;
+}
+
+.about-content ol,
+.about-content ul {
+  display: grid;
+  gap: 10px;
+  padding-left: 1.35rem;
+}
+
+.about-content li::marker {
+  color: var(--muted);
+}
+
 @media (max-width: 560px) {
   .app-shell {
     gap: 18px;
@@ -319,5 +409,9 @@ button:not(:disabled):active {
 
   .status-message {
     white-space: normal;
+  }
+
+  .about-shell {
+    padding-top: 20px;
   }
 }

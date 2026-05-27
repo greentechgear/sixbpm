@@ -9,7 +9,7 @@
   const REFRACTORY_MS = 3000;
   const STORAGE_KEY = "sixbpm.sessions";
   const REPORT_STORAGE_KEY = "sixbpm.lastReport";
-  const APP_VERSION = "diagnostics-v15 / cache-v17";
+  const APP_VERSION = "diagnostics-v15 / cache-v19";
 
   const $ = (id) => document.getElementById(id);
   const els = {
@@ -1184,7 +1184,7 @@
 
   function registerServiceWorker() {
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
-      navigator.serviceWorker.register("sw.js?v=cache-v17").catch((error) => {
+      navigator.serviceWorker.register("sw.js?v=cache-v19").catch((error) => {
         log(`Service worker registration failed: ${error.message}`);
       });
     }
