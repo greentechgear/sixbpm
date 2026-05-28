@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://sixbpm.consultdex.com/sitemap.xml
+Sitemap: https://sixbpm.com/sitemap.xml
