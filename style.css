@@ -415,6 +415,7 @@ input[type="range"]:focus-visible {
 .about-content {
   display: grid;
   gap: 16px;
+  min-width: 0;
 }
 
 .about-content h1,
@@ -429,6 +430,8 @@ input[type="range"]:focus-visible {
 .about-content h1 {
   font-size: clamp(2rem, 10vw, 3.3rem);
   line-height: 1;
+  overflow-wrap: anywhere;
+  hyphens: auto;
 }
 
 .about-content h2 {
@@ -448,6 +451,7 @@ input[type="range"]:focus-visible {
 .about-content li {
   color: var(--text);
   font-size: 1rem;
+  overflow-wrap: anywhere;
 }
 
 .about-content h1 a,
@@ -483,5 +487,10 @@ input[type="range"]:focus-visible {
 
   .about-shell {
     padding-top: 20px;
+  }
+
+  .about-content h1 {
+    font-size: 1.9rem;
+    line-height: 1.08;
   }
 }
