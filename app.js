@@ -9,9 +9,10 @@
   const FAST_BREATH_HOLD_STREAK = 3;
   const SENSOR_WEAK_STREAK = 6;
   const REFRACTORY_MS = 3000;
+  const TONE_OUTPUT_GAIN = 0.5;
   const STORAGE_KEY = "sixbpm.sessions";
   const REPORT_STORAGE_KEY = "sixbpm.lastReport";
-  const APP_VERSION = "diagnostics-v18 / cache-v22";
+  const APP_VERSION = "diagnostics-v19 / cache-v23";
 
   const $ = (id) => document.getElementById(id);
   const els = {
@@ -22,10 +23,8 @@
     timeRemaining: $("timeRemaining"),
     ratioSlider: $("ratioSlider"),
     floorSlider: $("floorSlider"),
-    volumeSlider: $("volumeSlider"),
     ratioValue: $("ratioValue"),
     floorValue: $("floorValue"),
-    volumeValue: $("volumeValue"),
     prepNote: $("prepNote"),
     versionLabel: $("versionLabel"),
     sensorDot: $("sensorDot"),
@@ -162,10 +161,6 @@
   function updateSliderLabels() {
     els.ratioValue.textContent = `1:${Number(els.ratioSlider.value).toFixed(1)}`;
     els.floorValue.textContent = Number(els.floorSlider.value).toFixed(1);
-    els.volumeValue.textContent = els.volumeSlider.value;
-    if (state.masterGain) {
-      state.masterGain.gain.setTargetAtTime(Number(els.volumeSlider.value) / 100, state.audioCtx.currentTime, 0.03);
-    }
   }
 
   function handleSettingInput() {
@@ -211,7 +206,7 @@
       const Ctx = window.AudioContext || window.webkitAudioContext;
       state.audioCtx = new Ctx();
       state.masterGain = state.audioCtx.createGain();
-      state.masterGain.gain.value = Number(els.volumeSlider.value) / 100;
+      state.masterGain.gain.value = TONE_OUTPUT_GAIN;
       state.masterGain.connect(state.audioCtx.destination);
     }
     if (state.audioCtx.state === "suspended") {
@@ -410,8 +405,7 @@
   function currentSettings() {
     return {
       ratio: Number(els.ratioSlider.value),
-      floor_bpm: Number(els.floorSlider.value),
-      volume: Number(els.volumeSlider.value)
+      floor_bpm: Number(els.floorSlider.value)
     };
   }
 
@@ -430,14 +424,13 @@
     }
     const keyById = {
       ratioSlider: "ratio",
-      floorSlider: "floor_bpm",
-      volumeSlider: "volume"
+      floorSlider: "floor_bpm"
     };
     const key = keyById[input.id];
     if (!key) {
       return;
     }
-    const value = key === "volume" ? Number(input.value) : rounded(Number(input.value));
+    const value = rounded(Number(input.value));
     const elapsedMs = state.sessionStartMs ? Math.round(performance.now() - state.sessionStartMs) : 0;
     const last = state.diagnostics.settings_changes[state.diagnostics.settings_changes.length - 1];
     if (last && last.key === key && last.value === value) {
@@ -617,7 +610,7 @@
   function scheduleTone(startAt, duration, startFreq, endFreq) {
     const osc = state.audioCtx.createOscillator();
     const gain = state.audioCtx.createGain();
-    const peak = Math.max(0.0001, Number(els.volumeSlider.value) / 100);
+    const peak = 1;
     osc.type = "sine";
     osc.frequency.setValueAtTime(startFreq, startAt);
     osc.frequency.linearRampToValueAtTime(endFreq, startAt + duration);
@@ -1303,7 +1296,7 @@
     state.phase = "pacing";
     setPrepVisible(false);
     animateOrb();
-    setStatus("Testing one breath cycle.");
+    setStatus("Testing one breath cycle. Use your phone volume buttons to adjust loudness.");
     log("Test tone cycle started");
     scheduleTimeout(() => setPhase("inhale"), 100);
     scheduleTimeout(() => setPhase("exhale"), 100 + inhaleSeconds * 1000);
@@ -1319,7 +1312,7 @@
 
   function registerServiceWorker() {
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
-      navigator.serviceWorker.register("sw.js?v=cache-v22").catch((error) => {
+      navigator.serviceWorker.register("sw.js?v=cache-v23").catch((error) => {
         log(`Service worker registration failed: ${error.message}`);
       });
     }
@@ -1332,10 +1325,8 @@
     updateStats();
     els.ratioSlider.addEventListener("input", handleSettingInput);
     els.floorSlider.addEventListener("input", handleSettingInput);
-    els.volumeSlider.addEventListener("input", handleSettingInput);
     els.ratioSlider.addEventListener("change", handleSettingChange);
     els.floorSlider.addEventListener("change", handleSettingChange);
-    els.volumeSlider.addEventListener("change", handleSettingChange);
     els.startButton.addEventListener("click", startSession);
     els.stopButton.addEventListener("click", stopSession);
     els.testButton.addEventListener("click", testTones);
