@@ -1,4 +1,10 @@
+# Content signals:
+# search=yes allows conventional search indexing and snippets.
+# ai-input=yes allows real-time retrieval/grounding by AI assistants.
+# ai-train=no reserves rights against model training or fine-tuning use.
+
 User-agent: *
+Content-Signal: search=yes,ai-input=yes,ai-train=no
 Allow: /
 
 Sitemap: https://sixbpm.com/sitemap.xml
