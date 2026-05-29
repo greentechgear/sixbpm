@@ -12,7 +12,7 @@
   const TONE_OUTPUT_GAIN = 0.5;
   const STORAGE_KEY = "sixbpm.sessions";
   const REPORT_STORAGE_KEY = "sixbpm.lastReport";
-  const APP_VERSION = "diagnostics-v19 / cache-v24";
+  const APP_VERSION = "diagnostics-v19 / cache-v25";
 
   const $ = (id) => document.getElementById(id);
   const els = {
@@ -1312,7 +1312,7 @@
 
   function registerServiceWorker() {
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
-      navigator.serviceWorker.register("sw.js?v=cache-v24").catch((error) => {
+      navigator.serviceWorker.register("sw.js?v=cache-v25").catch((error) => {
         log(`Service worker registration failed: ${error.message}`);
       });
     }

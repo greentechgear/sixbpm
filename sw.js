@@ -1,13 +1,13 @@
-const CACHE_VERSION = "sixbpm-v24";
+const CACHE_VERSION = "sixbpm-v25";
 const ASSETS = [
   "./",
   "index.html",
   "about.html",
   "vagal-tone.html",
   "operator-manifesto.html",
-  "app.js?v=cache-v24",
-  "style.css?v=cache-v24",
-  "manifest.json?v=cache-v24",
+  "app.js?v=cache-v25",
+  "style.css?v=cache-v25",
+  "manifest.json?v=cache-v25",
   "icons/icon-192.png",
   "icons/icon-512.png"
 ];
@@ -29,12 +29,22 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") {
+  const url = new URL(event.request.url);
+
+  if (
+    event.request.method !== "GET" ||
+    url.origin !== self.location.origin ||
+    !["http:", "https:"].includes(url.protocol)
+  ) {
     return;
   }
+
   event.respondWith(
     caches.match(event.request).then((cached) => {
       return cached || fetch(event.request).then((response) => {
+        if (!response.ok || response.type !== "basic") {
+          return response;
+        }
         const copy = response.clone();
         caches.open(CACHE_VERSION).then((cache) => cache.put(event.request, copy));
         return response;
