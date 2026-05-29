@@ -1,13 +1,14 @@
-const CACHE_VERSION = "sixbpm-v25";
+const CACHE_VERSION = "sixbpm-v26";
 const ASSETS = [
   "./",
   "index.html",
   "about.html",
   "vagal-tone.html",
   "operator-manifesto.html",
-  "app.js?v=cache-v25",
-  "style.css?v=cache-v25",
-  "manifest.json?v=cache-v25",
+  "app.js?v=cache-v26",
+  "style.css?v=cache-v26",
+  "manifest.json?v=cache-v26",
+  "favicon.ico",
   "icons/icon-192.png",
   "icons/icon-512.png"
 ];
