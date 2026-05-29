@@ -12,7 +12,7 @@
   const TONE_OUTPUT_GAIN = 0.5;
   const STORAGE_KEY = "sixbpm.sessions";
   const REPORT_STORAGE_KEY = "sixbpm.lastReport";
-  const APP_VERSION = "diagnostics-v19 / cache-v26";
+  const APP_VERSION = "diagnostics-v20 / cache-v27";
 
   const $ = (id) => document.getElementById(id);
   const els = {
@@ -118,6 +118,8 @@
       baseline_bpm: null,
       target_start_bpm: null,
       final_target_bpm: null,
+      final_user_bpm: null,
+      final_user_bpm_source: "none",
       pacing_cycles: 0,
       sync_event_count: 0,
       sync_miss_count: 0,
@@ -185,9 +187,42 @@
 
   function updateStats() {
     els.targetBpm.textContent = formatBpm(state.targetBpm);
-    els.userBpm.textContent = formatBpm(state.breathDetector.currentBpm);
+    els.userBpm.textContent = formatBpm(userBpmInfo().value);
     const elapsed = state.sessionStartMs ? performance.now() - state.sessionStartMs : 0;
     els.timeRemaining.textContent = formatTime(SESSION_MS - elapsed);
+  }
+
+  function userBpmInfo() {
+    if (Number.isFinite(state.breathDetector.currentBpm)) {
+      return {
+        value: state.breathDetector.currentBpm,
+        source: "current rolling BPM",
+        stale: false
+      };
+    }
+    if (state.phase === "done" && Number.isFinite(state.breathDetector.lastBpm)) {
+      return {
+        value: state.breathDetector.lastBpm,
+        source: "last detected rolling BPM; sensor weak near end",
+        stale: true
+      };
+    }
+    return {
+      value: null,
+      source: "unavailable",
+      stale: false
+    };
+  }
+
+  function completionMessage() {
+    const bpm = userBpmInfo();
+    if (Number.isFinite(bpm.value) && bpm.stale) {
+      return `Session complete. Final live BPM unavailable; last detected was ${bpm.value.toFixed(1)} before the signal weakened. Take BP now if tracking it.`;
+    }
+    if (Number.isFinite(bpm.value)) {
+      return `Session complete. Final detected BPM: ${bpm.value.toFixed(1)}. Sit up slowly. Take BP now if tracking it.`;
+    }
+    return "Session complete. Breath detection was weak near the end, so final BPM is unavailable. Take BP now if tracking it.";
   }
 
   function setSensorStatus(kind, label) {
@@ -387,8 +422,9 @@
     if (completed) {
       state.phase = "done";
       setPhase("done");
-      setStatus("Session complete. Sit up slowly. Take BP now if you are tracking it.");
       els.timeRemaining.textContent = "0:00";
+      updateStats();
+      setStatus(completionMessage());
       log("Session ended");
       finalizeDiagnostics("completed");
       saveSessionRecord();
@@ -451,6 +487,9 @@
     state.diagnostics.status = status;
     state.diagnostics.settings_final = currentSettings();
     state.diagnostics.final_target_bpm = rounded(state.targetBpm);
+    const bpm = userBpmInfo();
+    state.diagnostics.final_user_bpm = rounded(bpm.value);
+    state.diagnostics.final_user_bpm_source = bpm.source;
     state.diagnostics.sync_quality_score = rounded(calculateSyncScore());
     state.diagnostics.calibration_peak_count = state.breathDetector.calibrationPeakCount || state.diagnostics.calibration_peak_count;
     state.diagnostics.pacing_peak_count = state.breathDetector.pacingPeakCount || state.diagnostics.pacing_peak_count;
@@ -467,6 +506,7 @@
       ts: new Date().toISOString(),
       baseline_bpm: rounded(state.baselineBpm),
       final_target_bpm: rounded(state.targetBpm),
+      final_user_bpm: rounded(userBpmInfo().value),
       breath_count: state.breathCount,
       sync_quality_score: rounded(calculateSyncScore())
     };
@@ -1101,6 +1141,8 @@
       peaks: [],
       lastPeakMs: 0,
       currentBpm: null,
+      lastBpm: null,
+      lastBpmAtMs: null,
       rejectedPeakCount: 0,
       setAxis(axis, sampleRate) {
         this.axis = axis;
@@ -1109,6 +1151,8 @@
         this.peaks = [];
         this.lastPeakMs = 0;
         this.currentBpm = null;
+        this.lastBpm = null;
+        this.lastBpmAtMs = null;
       },
       addSample(t, value) {
         if (!this.axis) {
@@ -1156,6 +1200,8 @@
           }
           if (intervals.length) {
             this.currentBpm = clamp(60 / median(intervals), 4, 24);
+            this.lastBpm = this.currentBpm;
+            this.lastBpmAtMs = mid.t;
           }
         }
         return mid;
@@ -1222,6 +1268,7 @@
   function buildReport() {
     const elapsedMs = state.sessionStartMs ? Math.round(performance.now() - state.sessionStartMs) : null;
     const calibrationRemainingMs = state.phase === "calibrating" && elapsedMs !== null ? Math.max(0, CALIBRATION_MS - elapsedMs) : 0;
+    const bpm = userBpmInfo();
     return {
       diagnostics: state.diagnostics,
       current: {
@@ -1230,7 +1277,8 @@
         calibration_remaining_ms: calibrationRemainingMs,
         report_note: reportNote(elapsedMs),
         target_bpm: rounded(state.targetBpm),
-        user_bpm: rounded(state.breathDetector.currentBpm),
+        user_bpm: rounded(bpm.value),
+        user_bpm_source: bpm.source,
         peaks: state.breathDetector.peaks.map((t) => Math.round(t - state.sessionStartMs)).slice(-12),
         session_log_text: els.sessionLog.textContent
       }
@@ -1243,6 +1291,9 @@
     }
     if (state.phase === "pacing" && elapsedMs !== null && elapsedMs < 90000) {
       return "Pacing has started. For a useful report, let it run another minute if possible.";
+    }
+    if (state.phase === "done") {
+      return completionMessage();
     }
     return "Report captured.";
   }
@@ -1312,7 +1363,7 @@
 
   function registerServiceWorker() {
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
-      navigator.serviceWorker.register("sw.js?v=cache-v26").catch((error) => {
+      navigator.serviceWorker.register("sw.js?v=cache-v27").catch((error) => {
         log(`Service worker registration failed: ${error.message}`);
       });
     }
