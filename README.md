@@ -81,3 +81,16 @@ This is not a medical device, is not FDA-cleared, and should not be used to repl
 ## Build philosophy
 
 Single HTML file, no framework, no build step, no analytics, no telemetry, no accounts. Open the source and read it. That's the whole point.
+
+
+## Development
+
+The app is still served as static browser ES modules with no build step. Run the pure-logic test suite with:
+
+```bash
+npm test
+```
+
+## License
+
+MIT. See `LICENSE`.

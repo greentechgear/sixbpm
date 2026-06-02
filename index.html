@@ -7,8 +7,8 @@
     <meta name="color-scheme" content="light dark">
     <meta http-equiv="Permissions-Policy" content="accelerometer=(self), gyroscope=(self)">
     <title>sixbpm</title>
-    <link rel="manifest" href="manifest.json?v=cache-v27">
-    <link rel="stylesheet" href="style.css?v=cache-v27">
+    <link rel="manifest" href="manifest.json?v=cache-v28">
+    <link rel="stylesheet" href="style.css?v=cache-v28">
     <link rel="icon" href="icons/icon-192.png" type="image/png">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
   </head>
@@ -22,7 +22,7 @@
       </section>
 
       <section id="prepNote" class="prep-note" aria-label="session setup">
-        <p>Phone face-down on chest. Set volume with phone buttons, then leave it alone for 15 minutes.</p>
+        <p>Phone face-down on chest. Set volume with phone buttons, then keep the page visible for the session.</p>
       </section>
 
       <section class="stats" aria-label="session stats">
@@ -41,13 +41,23 @@
       </section>
 
       <section class="controls" aria-label="session controls">
+        <div class="preset-control" role="group" aria-label="breathing presets">
+          <button type="button" data-preset="balanced" aria-pressed="false">Balanced</button>
+          <button type="button" data-preset="calm" aria-pressed="true" class="active">Calm</button>
+          <button type="button" data-preset="extended" aria-pressed="false">Extended</button>
+          <button type="button" data-preset="custom" aria-pressed="false">Custom</button>
+        </div>
         <label class="control">
           <span>Inhale:exhale ratio <output id="ratioValue">1:2.0</output></span>
-          <input id="ratioSlider" type="range" min="1" max="2.5" step="0.1" value="2">
+          <input id="ratioSlider" type="range" min="1" max="2" step="0.1" value="2">
         </label>
         <label class="control">
           <span>Slowest target <output id="floorValue">6</output></span>
           <input id="floorSlider" type="range" min="5" max="10" step="0.1" value="6">
+        </label>
+        <label class="control">
+          <span>Session length <output id="durationValue">15 min</output></span>
+          <input id="durationSlider" type="range" min="15" max="20" step="5" value="15">
         </label>
       </section>
 
@@ -96,6 +106,6 @@
       </footer>
     </main>
 
-    <script src="app.js?v=cache-v27" defer></script>
+    <script type="module" src="app.js?v=cache-v28"></script>
   </body>
 </html>

@@ -164,6 +164,28 @@ input {
   border-radius: 8px;
 }
 
+
+.preset-control {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.preset-control button {
+  min-height: 38px;
+  padding: 8px;
+  background: var(--panel);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.preset-control button.active,
+.preset-control button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--button-text);
+  border-color: var(--accent);
+}
+
 .control {
   display: grid;
   gap: 8px;
@@ -481,7 +503,8 @@ input[type="range"]:focus-visible {
   }
 
   .stats,
-  .buttons {
+  .buttons,
+  .preset-control {
     grid-template-columns: 1fr;
   }
 
