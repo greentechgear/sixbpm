@@ -1,4 +1,4 @@
-export const APP_VERSION = "diagnostics-v21 / cache-v28";
+export const APP_VERSION = "diagnostics-v22 / cache-v29";
 
 export const LIMITS = Object.freeze({
   minRatio: 1,
@@ -25,10 +25,9 @@ export const STORAGE_KEY = "sixbpm.sessions";
 export const REPORT_STORAGE_KEY = "sixbpm.lastReport";
 
 export const PRESETS = Object.freeze({
-  balanced: Object.freeze({ id: "balanced", label: "Balanced", ratio: 1, floor_bpm: 6, duration_minutes: 15, note: "5s inhale, 5s exhale at 6 BPM" }),
-  calm: Object.freeze({ id: "calm", label: "Calm", ratio: 2, floor_bpm: 6, duration_minutes: 15, note: "3.3s inhale, 6.7s exhale at 6 BPM" }),
-  extended: Object.freeze({ id: "extended", label: "Extended", ratio: 2, floor_bpm: 6, duration_minutes: 20, note: "Calm 1:2 pacing for a longer session" }),
-  custom: Object.freeze({ id: "custom", label: "Custom", ratio: 2, floor_bpm: 6, duration_minutes: 15, note: "User-adjusted settings" })
+  six: Object.freeze({ id: "six", label: "6 BPM", mode: "adaptive", ratio: 2, floor_bpm: 6, duration_minutes: 15, note: "Adaptive 1:2 pacing toward 6 BPM" }),
+  humming478: Object.freeze({ id: "humming478", label: "4-7-8 hum", mode: "humming478", ratio: 2, floor_bpm: 6, duration_minutes: 15, note: "4s inhale, 7s hold, 8s humming exhale" }),
+  custom: Object.freeze({ id: "custom", label: "Custom", mode: "adaptive", ratio: 2, floor_bpm: 6, duration_minutes: 15, note: "User-adjusted adaptive pacing" })
 });
 
 export function clamp(value, min, max) {
@@ -75,7 +74,8 @@ export function applyPreset(id, current = PRESETS.custom) {
 }
 
 export function inferPreset(settings) {
-  for (const preset of [PRESETS.balanced, PRESETS.calm, PRESETS.extended]) {
+  if (settings.preset && PRESETS[settings.preset]) return settings.preset;
+  for (const preset of [PRESETS.six, PRESETS.humming478]) {
     if (Number(settings.ratio) === preset.ratio && Number(settings.floor_bpm) === preset.floor_bpm && Number(settings.duration_minutes) === preset.duration_minutes) {
       return preset.id;
     }
@@ -100,6 +100,20 @@ export function cycleTiming(targetBpm, ratio) {
   const cycleSeconds = 60 / safeTarget;
   const inhaleSeconds = cycleSeconds / (1 + safeRatio);
   return { targetBpm: safeTarget, ratio: safeRatio, cycleSeconds, inhaleSeconds, exhaleSeconds: cycleSeconds - inhaleSeconds };
+}
+
+export function humming478Timing() {
+  const inhaleSeconds = 4;
+  const holdSeconds = 7;
+  const exhaleSeconds = 8;
+  const cycleSeconds = inhaleSeconds + holdSeconds + exhaleSeconds;
+  return {
+    targetBpm: rounded(60 / cycleSeconds),
+    inhaleSeconds,
+    holdSeconds,
+    exhaleSeconds,
+    cycleSeconds
+  };
 }
 
 export function calculateSyncScore(samples, divergenceBpm = LIMITS.syncDivergenceBpm) {
@@ -215,7 +229,7 @@ export function createAppState(createDetector) {
     targetBpm: null,
     baselineBpm: null,
     sessionSettings: null,
-    activePreset: "calm",
+    activePreset: "six",
     breathCount: 0,
     syncSamples: [],
     syncMisses: 0,

@@ -10,6 +10,7 @@ import {
   createDiagnostics,
   cycleTiming,
   descentDecision,
+  humming478Timing,
   inferPreset,
   rounded,
   sensorFallbackDecision,
@@ -48,7 +49,10 @@ function sessionDurationMs() {
 }
 
 function currentSettings() {
-  return validateSettings(readSettings(els)).settings;
+  const base = validateSettings(readSettings(els)).settings;
+  const preset = PRESETS[state.activePreset] ? state.activePreset : inferPreset(base);
+  const mode = PRESETS[preset] ? PRESETS[preset].mode : "adaptive";
+  return { ...base, preset, mode };
 }
 
 function sessionSettings() {
@@ -105,10 +109,12 @@ function resetSessionState() {
 
 async function startSession() {
   if (state.phase !== "ready" && state.phase !== "done") return;
+  const selectedPreset = state.activePreset;
   resetSessionState();
+  state.activePreset = selectedPreset;
   const settings = currentSettings();
   state.sessionSettings = settings;
-  state.activePreset = inferPreset(settings);
+  state.activePreset = settings.preset;
   state.diagnostics.session_id = `sixbpm-${Date.now()}`;
   state.diagnostics.started_at = new Date().toISOString();
   state.diagnostics.settings = { ...settings, preset: state.activePreset };
@@ -119,8 +125,12 @@ async function startSession() {
     state.audio = createAudioController(log);
     await state.audio.ensure();
     state.diagnostics.audio_state = state.audio.ctx ? state.audio.ctx.state : "unavailable";
-    await requestMotionPermission();
-    state.diagnostics.permission = "granted";
+    if (settings.mode === "humming478") {
+      state.diagnostics.permission = "not needed for fixed 4-7-8 hum mode";
+    } else {
+      await requestMotionPermission();
+      state.diagnostics.permission = "granted";
+    }
   } catch (error) {
     state.diagnostics.permission = error.message;
     log(error.message);
@@ -129,20 +139,31 @@ async function startSession() {
     return;
   }
 
-  state.phase = "calibrating";
+  state.phase = settings.mode === "humming478" ? "pacing" : "calibrating";
   state.sessionStartMs = performance.now();
-  state.calibrationStartMs = state.sessionStartMs;
+  state.calibrationStartMs = settings.mode === "humming478" ? 0 : state.sessionStartMs;
   els.startButton.disabled = true;
   els.stopButton.disabled = false;
   els.testButton.disabled = true;
   setSessionControlLock(els, true);
   setPrepVisible(els, false);
+  updateStats(els, state, userBpmInfo().value, sessionDurationMs());
+  log("Session started");
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  startDebugPanel();
+  await state.audio.requestWakeLock(state.diagnostics);
+
+  if (settings.mode === "humming478") {
+    setSensorStatus(els, "", "Sensor: not used in hum mode");
+    beginHummingPacing();
+    state.sessionTimer = window.setInterval(tickSession, 250);
+    return;
+  }
+
   els.orb.classList.add("calibrating");
   setPhase(els, "calibrating");
   setStatus(els, "Calibrating. Keep the phone still while we find your breathing signal.");
   setSensorStatus(els, "active", "Sensor: active");
-  updateStats(els, state, userBpmInfo().value, sessionDurationMs());
-  log("Session started");
   log("Calibration started");
 
   state.sensors = createSensorController({
@@ -153,10 +174,7 @@ async function startSession() {
     log
   });
   state.sensors.start();
-  document.addEventListener("visibilitychange", onVisibilityChange);
   startSensorWatchdog();
-  startDebugPanel();
-  await state.audio.requestWakeLock(state.diagnostics);
   state.sessionTimer = window.setInterval(tickSession, 250);
 }
 
@@ -261,6 +279,24 @@ function calibrationReady(now) {
   return state.breathDetector.peaks.length >= 2 || now - state.calibrationStartMs >= 90000;
 }
 
+function beginHummingPacing() {
+  const timing = humming478Timing();
+  state.targetBpm = timing.targetBpm;
+  state.phase = "pacing";
+  state.diagnostics.baseline_source = "fixed 4-7-8 hum mode";
+  state.diagnostics.target_start_bpm = timing.targetBpm;
+  state.diagnostics.pacer_only_mode = true;
+  state.diagnostics.sensor_source = "not used";
+  setStatus(els, "4-7-8 hum mode. Inhale, hold, then hum out slowly.");
+  setPhase(els, "inhale");
+  log("4-7-8 hum mode started");
+  log("Pattern: inhale 4s, hold 7s, hum exhale 8s");
+  state.nextCycleAudioTime = state.audio.ctx.currentTime + 0.25;
+  scheduleNextCycle();
+  state.schedulerTimer = window.setInterval(scheduleAhead, 250);
+  animateOrb();
+}
+
 function beginPacing() {
   const measured = state.breathDetector.currentBpm;
   const fallback = estimateCalibrationBpm(state.breathDetector.peaks);
@@ -295,6 +331,10 @@ function scheduleAhead() {
 
 function scheduleNextCycle() {
   const settings = sessionSettings();
+  if (settings.mode === "humming478") {
+    scheduleHummingCycle();
+    return;
+  }
   const timing = cycleTiming(state.targetBpm || settings.floor_bpm, settings.ratio);
   const startAt = state.nextCycleAudioTime;
   const startMs = performance.now() + Math.max(0, (startAt - state.audio.ctx.currentTime) * 1000);
@@ -310,6 +350,20 @@ function scheduleNextCycle() {
   scheduleTimeout(() => { state.currentVisual = visual; setPhase(els, "inhale"); }, Math.max(0, (startAt - state.audio.ctx.currentTime) * 1000));
   scheduleTimeout(() => setPhase(els, "exhale"), Math.max(0, (startAt + timing.inhaleSeconds - state.audio.ctx.currentTime) * 1000));
   scheduleTimeout(() => evaluateDescent(cycle), Math.max(0, (startAt + timing.cycleSeconds - state.audio.ctx.currentTime) * 1000));
+  state.nextCycleAudioTime += timing.cycleSeconds;
+}
+
+function scheduleHummingCycle() {
+  const timing = humming478Timing();
+  const startAt = state.nextCycleAudioTime;
+  state.breathCount += 1;
+  state.diagnostics.pacing_cycles = state.breathCount;
+  const visual = { mode: "humming478", startAudio: startAt, inhaleSeconds: timing.inhaleSeconds, holdSeconds: timing.holdSeconds, exhaleSeconds: timing.exhaleSeconds, cycleSeconds: timing.cycleSeconds };
+  state.audio.scheduleTone(startAt, timing.inhaleSeconds, 330, 523);
+  state.audio.scheduleTone(startAt + timing.inhaleSeconds + timing.holdSeconds, timing.exhaleSeconds, 220, 185);
+  scheduleTimeout(() => { state.currentVisual = visual; setPhase(els, "inhale"); }, Math.max(0, (startAt - state.audio.ctx.currentTime) * 1000));
+  scheduleTimeout(() => setPhase(els, "hold"), Math.max(0, (startAt + timing.inhaleSeconds - state.audio.ctx.currentTime) * 1000));
+  scheduleTimeout(() => setPhase(els, "hum"), Math.max(0, (startAt + timing.inhaleSeconds + timing.holdSeconds - state.audio.ctx.currentTime) * 1000));
   state.nextCycleAudioTime += timing.cycleSeconds;
 }
 
@@ -357,6 +411,8 @@ function animateOrb() {
     const elapsed = state.audio.ctx.currentTime - visual.startAudio;
     let scale = 1;
     if (elapsed >= 0 && elapsed <= visual.inhaleSeconds) scale = 1 + 1.2 * easeInOut(elapsed / visual.inhaleSeconds);
+    else if (visual.mode === "humming478" && elapsed > visual.inhaleSeconds && elapsed <= visual.inhaleSeconds + visual.holdSeconds) scale = 2.2;
+    else if (visual.mode === "humming478" && elapsed > visual.inhaleSeconds + visual.holdSeconds && elapsed <= visual.cycleSeconds) scale = 2.2 - 1.2 * easeInOut((elapsed - visual.inhaleSeconds - visual.holdSeconds) / visual.exhaleSeconds);
     else if (elapsed > visual.inhaleSeconds && elapsed <= visual.cycleSeconds) scale = 2.2 - 1.2 * easeInOut((elapsed - visual.inhaleSeconds) / visual.exhaleSeconds);
     els.orb.style.transform = `scale(${scale.toFixed(3)})`;
   }
@@ -503,7 +559,7 @@ function recordSettingChange(input) {
   if (last && last.key === key && last.value === value) return;
   state.diagnostics.settings_changes.push({ elapsed_ms: elapsedMs, key, value });
   state.diagnostics.settings_changes = state.diagnostics.settings_changes.slice(-20);
-  state.diagnostics.settings_final = { ...currentSettings(), preset: inferPreset(currentSettings()) };
+  state.diagnostics.settings_final = currentSettings();
   log(`Setting changed: ${key} ${value}`);
 }
 
@@ -536,17 +592,27 @@ async function testTones() {
     return;
   }
   const settings = currentSettings();
-  const timing = cycleTiming(settings.floor_bpm, settings.ratio);
+  const timing = settings.mode === "humming478" ? humming478Timing() : cycleTiming(settings.floor_bpm, settings.ratio);
   const startAt = state.audio.ctx.currentTime + 0.1;
   state.audio.scheduleTone(startAt, timing.inhaleSeconds, 330, 523);
-  state.audio.scheduleTone(startAt + timing.inhaleSeconds, timing.exhaleSeconds, 523, 220);
-  state.currentVisual = { startAudio: startAt, inhaleSeconds: timing.inhaleSeconds, exhaleSeconds: timing.exhaleSeconds, cycleSeconds: timing.cycleSeconds };
+  if (settings.mode === "humming478") {
+    state.audio.scheduleTone(startAt + timing.inhaleSeconds + timing.holdSeconds, timing.exhaleSeconds, 220, 185);
+    state.currentVisual = { mode: "humming478", startAudio: startAt, inhaleSeconds: timing.inhaleSeconds, holdSeconds: timing.holdSeconds, exhaleSeconds: timing.exhaleSeconds, cycleSeconds: timing.cycleSeconds };
+  } else {
+    state.audio.scheduleTone(startAt + timing.inhaleSeconds, timing.exhaleSeconds, 523, 220);
+    state.currentVisual = { startAudio: startAt, inhaleSeconds: timing.inhaleSeconds, exhaleSeconds: timing.exhaleSeconds, cycleSeconds: timing.cycleSeconds };
+  }
   state.phase = "pacing";
   animateOrb();
-  setStatus(els, "Testing one breath cycle.");
-  log("Test tone cycle started");
+  setStatus(els, settings.mode === "humming478" ? "Testing one 4-7-8 hum cycle." : "Testing one breath cycle.");
+  log(settings.mode === "humming478" ? "Test 4-7-8 hum cycle started" : "Test tone cycle started");
   scheduleTimeout(() => setPhase(els, "inhale"), 100);
-  scheduleTimeout(() => setPhase(els, "exhale"), 100 + timing.inhaleSeconds * 1000);
+  if (settings.mode === "humming478") {
+    scheduleTimeout(() => setPhase(els, "hold"), 100 + timing.inhaleSeconds * 1000);
+    scheduleTimeout(() => setPhase(els, "hum"), 100 + (timing.inhaleSeconds + timing.holdSeconds) * 1000);
+  } else {
+    scheduleTimeout(() => setPhase(els, "exhale"), 100 + timing.inhaleSeconds * 1000);
+  }
   scheduleTimeout(() => {
     state.phase = "ready";
     window.cancelAnimationFrame(state.rafId);
@@ -576,14 +642,14 @@ function handleSettingChange(event) {
 
 function registerServiceWorker() {
   if ("serviceWorker" in navigator && location.protocol !== "file:") {
-    navigator.serviceWorker.register("sw.js?v=cache-v28").catch((error) => log(`Service worker registration failed: ${error.message}`));
+    navigator.serviceWorker.register("sw.js?v=cache-v29").catch((error) => log(`Service worker registration failed: ${error.message}`));
   }
 }
 
 function init() {
   initStaticUi(els);
-  writeSettings(els, PRESETS.calm);
-  updateStats(els, state, userBpmInfo().value, PRESETS.calm.duration_minutes * 60 * 1000);
+  writeSettings(els, PRESETS.six);
+  updateStats(els, state, userBpmInfo().value, PRESETS.six.duration_minutes * 60 * 1000);
   for (const button of els.presetButtons) button.addEventListener("click", onPresetClick);
   for (const slider of [els.ratioSlider, els.floorSlider, els.durationSlider]) {
     slider.addEventListener("input", handleSettingInput);

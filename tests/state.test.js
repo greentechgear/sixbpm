@@ -6,6 +6,7 @@ import {
   calculateSyncScore,
   cycleTiming,
   descentDecision,
+  humming478Timing,
   formatTime,
   inferPreset,
   sensorFallbackDecision,
@@ -28,19 +29,16 @@ test("ratio and bounds reject unsafe inputs", () => {
 });
 
 test("presets produce expected timing", () => {
-  const balanced = applyPreset("balanced");
-  assert.equal(inferPreset(balanced), "balanced");
-  assert.equal(cycleTiming(6, balanced.ratio).inhaleSeconds, 5);
-  assert.equal(cycleTiming(6, balanced.ratio).exhaleSeconds, 5);
+  const six = applyPreset("six");
+  assert.equal(inferPreset(six), "six");
+  assert.equal(Number(cycleTiming(6, six.ratio).inhaleSeconds.toFixed(1)), 3.3);
+  assert.equal(Number(cycleTiming(6, six.ratio).exhaleSeconds.toFixed(1)), 6.7);
 
-  const calm = applyPreset("calm");
-  assert.equal(calm.duration_minutes, 15);
-  assert.equal(Number(cycleTiming(6, calm.ratio).inhaleSeconds.toFixed(1)), 3.3);
-  assert.equal(Number(cycleTiming(6, calm.ratio).exhaleSeconds.toFixed(1)), 6.7);
-
-  const extended = applyPreset("extended");
-  assert.equal(extended.duration_minutes, 20);
-  assert.equal(Number(cycleTiming(6, extended.ratio).exhaleSeconds.toFixed(1)), 6.7);
+  const hum = applyPreset("humming478");
+  assert.equal(inferPreset({ ...hum, preset: "humming478" }), "humming478");
+  assert.equal(PRESETS.humming478.mode, "humming478");
+  const timing = humming478Timing();
+  assert.deepEqual(timing, { targetBpm: 3.2, inhaleSeconds: 4, holdSeconds: 7, exhaleSeconds: 8, cycleSeconds: 19 });
 });
 
 test("sync scoring and descent decisions are deterministic", () => {

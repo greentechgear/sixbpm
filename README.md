@@ -1,6 +1,6 @@
 # sixbpm
 
-sixbpm is a paced breathing PWA that guides breathing toward 6 breaths per minute with audio tones, a visual orb, and optional motion sensing from a phone on the chest. It exists because Breathwrk has cratered after the Peloton acquisition and the FDA-cleared RESPeRATE device costs $320.
+sixbpm is a paced breathing PWA that guides breathing toward 6 breaths per minute with audio tones, a visual orb, and optional motion sensing from a phone on the chest. It also includes a fixed 4-7-8 humming mode for users who want a simple inhale-hold-hum pattern without adaptive breath detection. It exists because Breathwrk has cratered after the Peloton acquisition and the FDA-cleared RESPeRATE device costs $320.
 
 ## Why 6 BPM?
 
@@ -65,7 +65,8 @@ A companion in-app reference, `vagal-tone.html`, explains vagal tone, sympatheti
 - Put your phone face-down on your chest.
 - Lie down and get comfortable.
 - Tap start session.
-- Do not fight the pacer; if you cannot keep up, the app holds the target rate.
+- In 6 BPM mode, do not fight the pacer; if you cannot keep up, the app holds the target rate.
+- Use 4-7-8 hum mode only if breath holds feel comfortable; stop if you feel lightheaded.
 - Use 15 minutes daily for measurable BP effects per the literature.
 
 ## How to self-host

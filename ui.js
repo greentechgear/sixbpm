@@ -112,5 +112,5 @@ export function initStaticUi(els) {
   els.versionLabel.textContent = `Version: ${APP_VERSION}`;
   setPhase(els, "ready");
   updateSettingLabels(els);
-  setActivePreset(els, PRESETS.calm.id);
+  setActivePreset(els, PRESETS.six.id);
 }
